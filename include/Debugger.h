@@ -5,14 +5,13 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
-
 #include <string>
 
 class Debugger {
 public:
     Debugger (std::string prog_name, pid_t pid) : _prog_name{std::move(prog_name)}, _pid{pid} {}
 
-    static void launchProcess(const char *prog_name, pid_t pid);
+    static void launch_process(const char *prog_name, pid_t pid);
     void run();
 
 private:

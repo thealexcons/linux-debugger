@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
         debugger.run();
     } else {
         // Execute program to debug (child)
-        Debugger::launchProcess(prog, pid);
+        Debugger::launch_process(prog, pid);
     }
 
 }

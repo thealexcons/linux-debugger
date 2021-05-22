@@ -9,8 +9,8 @@
 #include "Debugger.h"
 #include "Utils.h"
 
-// Launch the process to be debugged
-void Debugger::launchProcess(const char *prog_name, const pid_t pid) {
+// Launch the process to be debugged (pid must be 0, ie: called by child)
+void Debugger::launch_process(const char *prog_name, pid_t pid) {
     ptrace(PTRACE_TRACEME, pid, nullptr, nullptr); // Trace the child process
     execl(prog_name, prog_name, nullptr);
 }
@@ -18,7 +18,7 @@ void Debugger::launchProcess(const char *prog_name, const pid_t pid) {
 
 // Run the debugger
 void Debugger::run() {
-    // Wait until SIGTRAP signal is sent to the child, by the ptrace command in main()
+    // Wait until SIGTRAP signal is sent to the child (at launch or by software interrupt)
     int wait_status;
     waitpid(_pid, &wait_status, 0);
 

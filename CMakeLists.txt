@@ -4,4 +4,4 @@ project(LinuxDebugger)
 set(CMAKE_CXX_STANDARD 17)
 
 include_directories(include ext/libelfin ext/linenoise)
-add_executable(LinuxDebugger src/main.cpp src/Debugger.cpp ext/linenoise/linenoise.c include/Utils.h)
+add_executable(LinuxDebugger ext/linenoise/linenoise.c src/main.cpp src/Debugger.cpp src/Breakpoint.cpp)
