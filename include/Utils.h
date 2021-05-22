@@ -28,4 +28,12 @@ bool is_prefixed_by(const std::string& pre, const std::string& str) {
     return std::equal(pre.begin(), pre.end(), str.begin());
 }
 
+// Print number in hex. Set full to true for full 64 bits to be shown
+void print_hex(const uint64_t& num, bool full = false, bool end_line = true) {
+    std::cout << "0x" << std::setfill('0');
+    if (full) std::cout << std::setw( 16);
+    std::cout << std::hex << num;
+    if (end_line) std::cout << '\n';
+}
+
 #endif //UTILS_H
