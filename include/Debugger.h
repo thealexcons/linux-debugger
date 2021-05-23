@@ -14,8 +14,10 @@ public:
     Debugger (std::string prog_name, pid_t pid) {
         _prog_name = std::move(prog_name);
         _pid = pid;
-        _abs_load_addr = 0x555555554000; //read_abs_load_addr(_pid);
-        std::cout << "Process " << pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
+        /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
+           given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
+        _abs_load_addr = is_pie(_prog_name) ? read_abs_load_addr(_pid) : 0;
+        std::cout << "(FOR ME) Process " << pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
     }
 
     static void launch_process(const char *prog_name, pid_t pid);
@@ -49,6 +51,7 @@ private:
     // Other helpers
     void wait_for_signal() const;
     static uintptr_t read_abs_load_addr(pid_t pid);
+    static bool is_pie(const std::string& prog_name);
 
 };
 

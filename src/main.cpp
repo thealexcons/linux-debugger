@@ -2,10 +2,8 @@
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
-#include <sys/ptrace.h>
 #include <Debugger.h>
 
-uintptr_t read_abs_load_addr(pid_t pid);
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

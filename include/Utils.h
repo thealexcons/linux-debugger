@@ -7,6 +7,14 @@
 
 #include <vector>
 #include <sstream>
+#include <cstdio>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <array>
+#include <iomanip>
+#include <elf.h>
 
 // Splits a string into a vector of strings given a delimiter char
 std::vector<std::string> split_by(const std::string& str, char delim) {
@@ -34,6 +42,18 @@ void print_hex(const uint64_t& num, bool full = false, bool end_line = true) {
     if (full) std::cout << std::setw( 16);
     std::cout << std::hex << num;
     if (end_line) std::cout << '\n';
+}
+
+// Function in C that checks if an ELF file is a shared object (PIE) or an executable
+bool is_elf_pie(const char* file) {
+    Elf64_Ehdr header;
+    FILE *f = fopen(file, "rb");
+    if (f) {
+        fread(&header, 1, sizeof(header), f);
+        // No need to check if it is an ELF file (it is already in execution)
+    }
+    fclose(f);
+    return header.e_type == ET_DYN; // type flag is set to position independent (dynamic)
 }
 
 #endif //UTILS_H

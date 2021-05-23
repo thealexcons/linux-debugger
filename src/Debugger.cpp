@@ -5,20 +5,18 @@
 #include <linenoise.h>
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <sys/ptrace.h>
 #include <unistd.h>
 #include <sys/personality.h>
-#include <iomanip>
 
 #include "Debugger.h"
 #include "Utils.h"
 #include "Registers.h"
 
-// Launch the process to be debugged (pid must be 0, ie: called by child)
+// Launch the process to be debugged (called by child)
 void Debugger::launch_process(const char *prog_name, pid_t pid) {
     personality(ADDR_NO_RANDOMIZE);                 // Disable address space randomisation
-    ptrace(PTRACE_TRACEME, pid, nullptr, nullptr);  // Trace the child process
+    ptrace(PTRACE_TRACEME, pid, nullptr, nullptr);  // Trace the child process (pid = 0)
     execl(prog_name, prog_name, nullptr);                  // Start program
 }
 
@@ -182,11 +180,6 @@ uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
     path += "/maps";
 
     std::ifstream ifs {path};
-    if (!ifs) {
-        std::cerr << "Could not read absolute load address of process. Compile your program with the -no-pie flag\n";
-        return 0;
-    }
-
     std::string addr_str;
     std::getline(ifs, addr_str, '-');   // Read first address in file (number before the first dash)
 
@@ -196,5 +189,10 @@ uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
     ss >> addr;
 
     return addr;
+}
+
+// Checks if the binary was compiled as a position independent executable or not
+bool Debugger::is_pie(const std::string& prog_name) {
+    return is_elf_pie(prog_name.c_str());
 }
 
