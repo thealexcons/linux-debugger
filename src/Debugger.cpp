@@ -4,6 +4,8 @@
 #include <sys/wait.h>
 #include <linenoise.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <sys/ptrace.h>
 #include <unistd.h>
 #include <sys/personality.h>
@@ -92,8 +94,7 @@ void Debugger::continue_cmd() {
 
 // COMMAND: Set breakpoint
 void Debugger::set_breakpoint_cmd(const std::string& address) {
-    // TODO: more robust address parsing
-    // TODO: find absolute load address by reading /proc/<pid>/maps (end of tutorial 2)
+    // TODO: more robust address parsing (same for memory/register writing)
     set_breakpoint(std::stol(address, nullptr, 16)); // assumes address is 0xADDR
 }
 
@@ -101,9 +102,9 @@ void Debugger::set_breakpoint_cmd(const std::string& address) {
 void Debugger::set_breakpoint(std::uintptr_t addr) {
     std::cout << "Set breakpoint at address ";
     print_hex(addr);
-    Breakpoint bp {_pid, addr};
+    Breakpoint bp {_pid, addr + _abs_load_addr};
     bp.enable();
-    _breakpoints[addr] = bp;
+    _breakpoints[addr] = bp;    // Index by relative address (without absolute load addr)
 }
 
 // Removes a breakpoint
@@ -154,16 +155,16 @@ void Debugger::set_pc(uint64_t pc) const {
     set_reg_value(_pid, Reg::rip, pc);
 }
 
-// Step over a breakpoint when resuming execution
+// Step over a (possible) breakpoint when resuming execution
 void Debugger::step_over_breakpoint() {
     auto possible_bp_addr = get_pc() - 1;   // Possible breakpoint is the current instr (one less than pc)
+    auto rel_bp_addr = possible_bp_addr - _abs_load_addr;   // Index into map is the relative address
 
-    if (_breakpoints.count(possible_bp_addr) != 0) {    // Check if the current instr is a breakpoint
-        auto& bp = _breakpoints[possible_bp_addr];
+    if (_breakpoints.count(rel_bp_addr) != 0) {    // Check if the current instr is a breakpoint
+        auto& bp = _breakpoints[rel_bp_addr];
         if (bp.is_enabled()) {
             // Put execution before breakpoint and disable it (restoring original instr)
-            auto prev_instr_addr = possible_bp_addr;
-            set_pc(prev_instr_addr);
+            set_pc(possible_bp_addr);
             bp.disable();
 
             // Single step over the breakpoint and re-enable it
@@ -174,6 +175,26 @@ void Debugger::step_over_breakpoint() {
     }
 }
 
+// Get the absolute load address of the child process from /proc/<pid>/maps
+uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
+    std::string path = "/proc/";
+    path += std::to_string(pid);
+    path += "/maps";
 
+    std::ifstream ifs {path};
+    if (!ifs) {
+        std::cerr << "Could not read absolute load address of process. Compile your program with the -no-pie flag\n";
+        return 0;
+    }
 
+    std::string addr_str;
+    std::getline(ifs, addr_str, '-');   // Read first address in file (number before the first dash)
+
+    std::stringstream ss;
+    uintptr_t addr;
+    ss << std::hex << addr_str;
+    ss >> addr;
+
+    return addr;
+}
 

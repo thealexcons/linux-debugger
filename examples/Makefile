@@ -1,6 +1,6 @@
 
 hello: hello.cpp
-	g++ hello.cpp -o hello -no-pie -g -O0
+	g++ hello.cpp -o hello -g -O0
 
 loop: loop.c
-	gcc loop.c -o loop -no-pie -g -O0
+	gcc loop.c -o loop -g -O0
