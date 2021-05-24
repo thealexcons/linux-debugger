@@ -22,6 +22,5 @@ int main(int argc, char *argv[]) {
         // Execute program to debug (child)
         Debugger::launch_process(prog, pid);
     }
-
 }
 

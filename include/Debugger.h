@@ -11,19 +11,21 @@
 
 class Debugger {
 public:
-    Debugger (std::string prog_name, pid_t pid) {
-        _prog_name = std::move(prog_name);
+    Debugger (const std::string& prog_name, pid_t pid) {
+        _prog_name = prog_name;
         _pid = pid;
-        /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
-           given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
-        _abs_load_addr = is_pie(_prog_name) ? read_abs_load_addr(_pid) : 0;
-        std::cout << "(FOR ME) Process " << pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
+        _abs_load_addr = UINTPTR_MAX;
     }
 
     static void launch_process(const char *prog_name, pid_t pid);
 
+    // Debugger API
     void run();
     void set_breakpoint(std::uintptr_t addr);
+    void remove_breakpoint(uintptr_t addr);
+    void disable_breakpoint(uintptr_t addr);
+    void continue_execution();
+
     void print_registers() const;
 
 private:
@@ -43,16 +45,13 @@ private:
 
     // Command handlers
     void handle(const std::string& cmd);
-    void continue_cmd();
     void set_breakpoint_cmd(const std::string &address);
-    void remove_breakpoint(uintptr_t addr);
-    void disable_breakpoint(uintptr_t addr);
 
     // Other helpers
     void wait_for_signal() const;
     static uintptr_t read_abs_load_addr(pid_t pid);
     static bool is_pie(const std::string& prog_name);
-
+    void set_abs_load_addr_on_launch();
 };
 
 

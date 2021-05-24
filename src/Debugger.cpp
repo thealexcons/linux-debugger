@@ -26,11 +26,21 @@ void Debugger::wait_for_signal() const {
     waitpid(_pid, &wait_status, 0);
 }
 
+// Read load address at launch (done here to avoid race conditions)
+inline void Debugger::set_abs_load_addr_on_launch() {
+    if (_abs_load_addr == UINTPTR_MAX) {
+        /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
+        given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
+        _abs_load_addr = is_pie(_prog_name) ? read_abs_load_addr(_pid) : 0;
+        std::cout << "(FOR ME) Process " << _pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
+    }
+}
 
 // Run the debugger
 void Debugger::run() {
     // Wait until SIGTRAP signal is sent to the child (at launch or by software interrupt)
     wait_for_signal();
+    set_abs_load_addr_on_launch();
 
     // Use linenoise library to handle user input and keep a history of commands
     char *cmd;
@@ -50,7 +60,7 @@ void Debugger::handle(const std::string& line) {
     // TODO: check number of args, etc. MORE ROBUST COMMAND PARSING
 
     if (is_prefixed_by(cmd, "continue")) {
-        continue_cmd();
+        continue_execution();
     } else if (is_prefixed_by(cmd, "break")) {
         set_breakpoint_cmd(args[1]);
     } else if (is_prefixed_by(cmd, "registers")) {
@@ -83,7 +93,7 @@ void Debugger::handle(const std::string& line) {
 }
 
 // COMMAND: Continue execution
-void Debugger::continue_cmd() {
+void Debugger::continue_execution() {
     // Step over any possible breakpoint and continue execution
     step_over_breakpoint();
     ptrace(PTRACE_CONT, _pid, nullptr, nullptr);
@@ -105,7 +115,7 @@ void Debugger::set_breakpoint(std::uintptr_t addr) {
     _breakpoints[addr] = bp;    // Index by relative address (without absolute load addr)
 }
 
-// Removes a breakpoint
+// Removes (and disables) a breakpoint
 void Debugger::remove_breakpoint(std::uintptr_t addr) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();
@@ -115,7 +125,7 @@ void Debugger::remove_breakpoint(std::uintptr_t addr) {
     }
 }
 
-// Disables a breakpoint
+// Disables a breakpoint without removing it
 void Debugger::disable_breakpoint(std::uintptr_t addr) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();

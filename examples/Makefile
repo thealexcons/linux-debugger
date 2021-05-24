@@ -6,6 +6,10 @@ hello: hello.cpp
 loop: loop.c
 	gcc loop.c -o loop -g -O0
 
+functions: functions.c
+	g++ functions.c -o functions -g -O0
+
 clean:
 	rm loop
 	rm hello
+	rm functions
