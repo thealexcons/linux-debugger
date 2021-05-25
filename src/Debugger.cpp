@@ -12,6 +12,7 @@
 #include "Debugger.h"
 #include "Utils.h"
 #include "Registers.h"
+#include "DwarfContext.h"
 
 // Launch the process to be debugged (called by child)
 void Debugger::launch_process(const char *prog_name, pid_t pid) {
@@ -24,7 +25,45 @@ void Debugger::launch_process(const char *prog_name, pid_t pid) {
 void Debugger::wait_for_signal() const {
     int wait_status;
     waitpid(_pid, &wait_status, 0);
+
+    // Get the signal information and handle specific signal
+    siginfo_t info;
+    ptrace(PTRACE_GETSIGINFO, _pid, nullptr, &info);
+
+    switch (info.si_signo) {
+        case SIGTRAP:
+            handle_sigtrap(info);
+            break;
+        case SIGSEGV:
+            std::cout << "Oops, you got a segfault. Reason: " << info.si_code << '\n';
+            break;
+        default:
+            std::cout << "Process finished running (or got an unknown signal).\n";
+            exit(EXIT_SUCCESS); // TODO: query to run again?
+    }
 }
+
+// Handle a SIGTRAP (due to a breakpoint or single stepping)
+void Debugger::handle_sigtrap(siginfo_t info) const {
+    switch (info.si_code) {
+        // Breakpoint is hit (either of the following codes)
+        case SI_KERNEL:
+        case TRAP_BRKPT:
+        {
+            set_pc(get_pc() - 1);   // Go back one instruction to execute the original instruction next
+            auto rel_addr = get_pc() - _abs_load_addr;
+            std::cout << "Hit breakpoint at 0x" << std::hex << rel_addr << std::endl;
+            auto line_entry = _dwarf_ctx.get_line_from_pc(rel_addr);   // DWARF stores relative addresses
+            _dwarf_ctx.print_source(line_entry->file->path, line_entry->line);
+            return;
+        }
+        // Single stepping (do nothing)
+        case TRAP_TRACE:
+            return;
+        default:;   // Ignore unknown SIGTRAPs
+    }
+}
+
 
 // Read load address at launch (done here to avoid race conditions)
 inline void Debugger::init_abs_load_addr_on_launch() {
@@ -38,7 +77,7 @@ inline void Debugger::init_abs_load_addr_on_launch() {
 
 // Run the debugger
 void Debugger::run() {
-    // Wait until SIGTRAP signal is sent to the child (at launch or by software interrupt)
+    // Wait until signal is sent to the child (at launch or by software interrupt)
     wait_for_signal();
     init_abs_load_addr_on_launch(); // Only has effect once: on launch of child process
 
@@ -165,16 +204,13 @@ void Debugger::set_pc(uint64_t pc) const {
 
 // Step over a (possible) breakpoint when resuming execution
 void Debugger::step_over_breakpoint() {
-    auto possible_bp_addr = get_pc() - 1;   // Possible breakpoint is the current instr (one less than pc)
-    auto rel_bp_addr = possible_bp_addr - _abs_load_addr;   // Index into map is the relative address
+    auto rel_addr = get_pc() - _abs_load_addr;
 
-    if (_breakpoints.count(rel_bp_addr) != 0) {    // Check if the current instr is a breakpoint
-        auto& bp = _breakpoints[rel_bp_addr];
+    if (_breakpoints.count(rel_addr) != 0) {    // Check if the current instr is a breakpoint
+        auto& bp = _breakpoints[rel_addr];
         if (bp.is_enabled()) {
-            // Put execution before breakpoint and disable it (restoring original instr)
-            set_pc(possible_bp_addr);
+            // Restore original instruction at breakpoint address
             bp.disable();
-
             // Single step over the breakpoint and re-enable it
             ptrace(PTRACE_SINGLESTEP, _pid, nullptr, nullptr);
             wait_for_signal();
@@ -200,5 +236,3 @@ uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
 
     return addr;
 }
-
-

@@ -31,7 +31,6 @@ public:
     void continue_execution();
 
     void print_registers() const;
-    void print_source(const std::string& file_name, uint line, uint num_lines);
 
 private:
     std::string _prog_name;
@@ -55,6 +54,7 @@ private:
 
     // Other helpers
     void wait_for_signal() const;
+    void handle_sigtrap(siginfo_t info) const;
     static uintptr_t read_abs_load_addr(pid_t pid);
     void init_abs_load_addr_on_launch();
 };

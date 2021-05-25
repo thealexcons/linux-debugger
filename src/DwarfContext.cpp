@@ -7,7 +7,8 @@
 #include "DwarfContext.h"
 
 // Gets the DIE of the enclosing function from the current PC
-dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) {
+// TODO extension: member functions and inlining (tut5)
+dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) const {
     for (auto& cu : _dwarf.compilation_units()) {
         if (die_pc_range(cu.root()).contains(pc)) {
             for (const auto& die : cu.root()) {
@@ -23,7 +24,7 @@ dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) {
 }
 
 // Gets the line corresponding to the current PC
-dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) {
+dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) const {
     for (auto& cu : _dwarf.compilation_units()) {
         if (die_pc_range(cu.root()).contains(pc)) {
             auto& line_table = cu.get_line_table();
@@ -40,7 +41,7 @@ dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) {
 
 // Prints the source lines
 // TODO: move file ifstream init to constructor?
-void DwarfContext::print_source(const std::string &file_name, uint line, uint num_lines) {
+void DwarfContext::print_source(const std::string &file_name, uint line, uint num_lines) const {
     std::ifstream file {file_name};
 
     auto start_line = line <= num_lines ? 1 : line - num_lines;

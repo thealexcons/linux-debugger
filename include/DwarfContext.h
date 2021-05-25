@@ -20,9 +20,9 @@ public:
         _dwarf = dwarf::dwarf{dwarf::elf::create_loader(_elf)};
     }
 
-    dwarf::die get_function_from_pc(uint64_t pc);
-    dwarf::line_table::iterator get_line_from_pc(uint64_t pc);
-    void print_source(const std::string& file, uint line, uint num_lines);
+    dwarf::die get_function_from_pc(uint64_t pc) const;
+    dwarf::line_table::iterator get_line_from_pc(uint64_t pc) const;
+    void print_source(const std::string& file, uint line, uint num_lines=2) const;
 
 private:
     dwarf::dwarf _dwarf;
