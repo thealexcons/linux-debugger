@@ -23,7 +23,7 @@ dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) const {
     throw std::out_of_range{"Cannot find enclosing function"};
 }
 
-// Gets the line corresponding to the current PC
+// Gets the line corresponding to the current PC (which is a relative address)
 dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) const {
     for (auto& cu : _dwarf.compilation_units()) {
         if (die_pc_range(cu.root()).contains(pc)) {

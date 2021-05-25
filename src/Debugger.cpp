@@ -12,7 +12,7 @@
 #include "Debugger.h"
 #include "Utils.h"
 #include "Registers.h"
-#include "DwarfContext.h"
+
 
 // Launch the process to be debugged (called by child)
 void Debugger::launch_process(const char *prog_name, pid_t pid) {
@@ -22,7 +22,7 @@ void Debugger::launch_process(const char *prog_name, pid_t pid) {
 }
 
 // Wait for any signal to be sent to the process
-void Debugger::wait_for_signal() const {
+void Debugger::wait_for_signal() {
     int wait_status;
     waitpid(_pid, &wait_status, 0);
 
@@ -35,16 +35,20 @@ void Debugger::wait_for_signal() const {
             handle_sigtrap(info);
             break;
         case SIGSEGV:
-            std::cout << "Oops, you got a segfault. Reason: " << info.si_code << '\n';
-            break;
-        default:
-            std::cout << "Process finished running (or got an unknown signal).\n";
+        {
+            auto line_entry = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr);
+            std::cout << "Oops, you got a segfault on line " << std::dec << line_entry->line << ":\n";
+            _dwarf_ctx.print_source(line_entry->file->path, line_entry->line, 1);
             exit(EXIT_SUCCESS); // TODO: query to run again?
+        }
+        default:
+            std::cout << "Process finished running.\n";
+            exit(EXIT_SUCCESS); // TODO: not sure if this is correct, process may get any signal (like a pipe)
     }
 }
 
 // Handle a SIGTRAP (due to a breakpoint or single stepping)
-void Debugger::handle_sigtrap(siginfo_t info) const {
+void Debugger::handle_sigtrap(siginfo_t info) {
     switch (info.si_code) {
         // Breakpoint is hit (either of the following codes)
         case SI_KERNEL:
@@ -53,8 +57,7 @@ void Debugger::handle_sigtrap(siginfo_t info) const {
             set_pc(get_pc() - 1);   // Go back one instruction to execute the original instruction next
             auto rel_addr = get_pc() - _abs_load_addr;
             std::cout << "Hit breakpoint at 0x" << std::hex << rel_addr << std::endl;
-            auto line_entry = _dwarf_ctx.get_line_from_pc(rel_addr);   // DWARF stores relative addresses
-            _dwarf_ctx.print_source(line_entry->file->path, line_entry->line);
+            print_source_lines(rel_addr, 1);
             return;
         }
         // Single stepping (do nothing)
@@ -102,6 +105,10 @@ void Debugger::handle(const std::string& line) {
         continue_execution();
     } else if (is_prefixed_by(cmd, "break")) {
         set_breakpoint_cmd(args[1]);
+    } else if (is_prefixed_by(cmd, "step")) {
+        single_step_instruction();
+        std::cout << "Stepped over one instruction.\n";
+        print_source_lines(get_pc() - _abs_load_addr);
     } else if (is_prefixed_by(cmd, "registers")) {
         if (is_prefixed_by(args[1], "print")) {
             print_registers();
@@ -134,7 +141,7 @@ void Debugger::handle(const std::string& line) {
 // COMMAND: Continue execution
 void Debugger::continue_execution() {
     // Step over any possible breakpoint and continue execution
-    step_over_breakpoint();
+    single_step_instruction();
     ptrace(PTRACE_CONT, _pid, nullptr, nullptr);
     wait_for_signal();
 }
@@ -175,12 +182,12 @@ void Debugger::disable_breakpoint(std::uintptr_t addr) {
 
 // COMMAND: Memory read
 uint64_t Debugger::read_memory(uint64_t addr) const {
-    return ptrace(PTRACE_PEEKDATA, _pid, addr, nullptr);
+    return ptrace(PTRACE_PEEKDATA, _pid, addr + _abs_load_addr, nullptr);
 }
 
 // COMMAND: Memory write
 uint64_t Debugger::write_memory(uint64_t addr, uint8_t val) const {
-    return ptrace(PTRACE_POKEDATA, _pid, addr, val);
+    return ptrace(PTRACE_POKEDATA, _pid, addr + _abs_load_addr, val);
 }
 
 // Print the values of the registers
@@ -190,6 +197,14 @@ void Debugger::print_registers() const {
         std::cout << get_reg_name(r) << " ";
         print_hex(get_reg_value(_pid, r), true);
     }
+}
+
+// Print the source line(s), given the relative address
+void Debugger::print_source_lines(uint64_t addr, uint line_win_size) {
+    try {
+        auto line_entry = _dwarf_ctx.get_line_from_pc(addr);   // DWARF stores relative addresses
+        _dwarf_ctx.print_source(line_entry->file->path, line_entry->line, line_win_size);
+    } catch (const std::out_of_range& oor) {}
 }
 
 // Get the program counter (rip)
@@ -202,8 +217,14 @@ void Debugger::set_pc(uint64_t pc) const {
     set_reg_value(_pid, Reg::rip, pc);
 }
 
-// Step over a (possible) breakpoint when resuming execution
-void Debugger::step_over_breakpoint() {
+// Perform a single step over an instruction via ptrace
+void Debugger::single_step() {
+    ptrace(PTRACE_SINGLESTEP, _pid, nullptr, nullptr);
+    wait_for_signal();
+}
+
+// Single step over a (possible) breakpoint when resuming execution
+void Debugger::single_step_instruction() {
     auto rel_addr = get_pc() - _abs_load_addr;
 
     if (_breakpoints.count(rel_addr) != 0) {    // Check if the current instr is a breakpoint
@@ -212,10 +233,11 @@ void Debugger::step_over_breakpoint() {
             // Restore original instruction at breakpoint address
             bp.disable();
             // Single step over the breakpoint and re-enable it
-            ptrace(PTRACE_SINGLESTEP, _pid, nullptr, nullptr);
-            wait_for_signal();
+            single_step();
             bp.enable();
         }
+    } else {
+        single_step();  // No breakpoint, just single step as usualy
     }
 }
 

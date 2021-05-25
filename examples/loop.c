@@ -7,5 +7,8 @@ int main() {
         }
     }
 
+//    int* ptr = 0;
+//    printf("%d\n", *ptr);
+
     return 42;
 }

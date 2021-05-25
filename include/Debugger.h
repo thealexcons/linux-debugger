@@ -31,6 +31,7 @@ public:
     void continue_execution();
 
     void print_registers() const;
+    void print_source_lines(uint64_t addr, uint line_win_size=0);
 
 private:
     std::string _prog_name;
@@ -43,20 +44,22 @@ private:
     uint64_t read_memory(uint64_t addr) const;
     uint64_t write_memory(uint64_t addr, uint8_t val) const;
 
-    // Step over breakpoints
+    // Stepping
     uint64_t get_pc() const;
     void set_pc(uint64_t pc) const;
-    void step_over_breakpoint();
+    void single_step();
+    void single_step_instruction();
 
     // Command handlers
     void handle(const std::string& cmd);
     void set_breakpoint_cmd(const std::string &address);
 
     // Other helpers
-    void wait_for_signal() const;
-    void handle_sigtrap(siginfo_t info) const;
+    void wait_for_signal();
+    void handle_sigtrap(siginfo_t info);
     static uintptr_t read_abs_load_addr(pid_t pid);
     void init_abs_load_addr_on_launch();
+
 };
 
 
