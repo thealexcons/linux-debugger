@@ -7,7 +7,10 @@
 
 #include <string>
 #include <unordered_map>
+
 #include "Breakpoint.h"
+#include "DwarfContext.h"
+
 
 class Debugger {
 public:
@@ -15,6 +18,7 @@ public:
         _prog_name = prog_name;
         _pid = pid;
         _abs_load_addr = UINTPTR_MAX;
+        _dwarf_ctx = DwarfContext{_prog_name};
     }
 
     static void launch_process(const char *prog_name, pid_t pid);
@@ -27,12 +31,14 @@ public:
     void continue_execution();
 
     void print_registers() const;
+    void print_source(const std::string& file_name, uint line, uint num_lines);
 
 private:
     std::string _prog_name;
     pid_t _pid;
-    std::uintptr_t _abs_load_addr;
     std::unordered_map<std::uintptr_t, Breakpoint> _breakpoints;
+    std::uintptr_t _abs_load_addr;
+    DwarfContext _dwarf_ctx;
 
     // Read/write memory (via ptrace)
     uint64_t read_memory(uint64_t addr) const;
@@ -50,8 +56,7 @@ private:
     // Other helpers
     void wait_for_signal() const;
     static uintptr_t read_abs_load_addr(pid_t pid);
-    static bool is_pie(const std::string& prog_name);
-    void set_abs_load_addr_on_launch();
+    void init_abs_load_addr_on_launch();
 };
 
 

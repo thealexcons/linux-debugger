@@ -27,11 +27,11 @@ void Debugger::wait_for_signal() const {
 }
 
 // Read load address at launch (done here to avoid race conditions)
-inline void Debugger::set_abs_load_addr_on_launch() {
+inline void Debugger::init_abs_load_addr_on_launch() {
     if (_abs_load_addr == UINTPTR_MAX) {
         /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
         given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
-        _abs_load_addr = is_pie(_prog_name) ? read_abs_load_addr(_pid) : 0;
+        _abs_load_addr = is_elf_pie(_prog_name.c_str()) ? read_abs_load_addr(_pid) : 0;
         std::cout << "(FOR ME) Process " << _pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
     }
 }
@@ -40,7 +40,7 @@ inline void Debugger::set_abs_load_addr_on_launch() {
 void Debugger::run() {
     // Wait until SIGTRAP signal is sent to the child (at launch or by software interrupt)
     wait_for_signal();
-    set_abs_load_addr_on_launch();
+    init_abs_load_addr_on_launch(); // Only has effect once: on launch of child process
 
     // Use linenoise library to handle user input and keep a history of commands
     char *cmd;
@@ -201,8 +201,4 @@ uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
     return addr;
 }
 
-// Checks if the binary was compiled as a position independent executable or not
-bool Debugger::is_pie(const std::string& prog_name) {
-    return is_elf_pie(prog_name.c_str());
-}
 
