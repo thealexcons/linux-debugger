@@ -25,9 +25,9 @@ public:
 
     // Debugger API
     void run();
-    void set_breakpoint(std::uintptr_t addr);
-    void remove_breakpoint(uintptr_t addr);
-    void disable_breakpoint(uintptr_t addr);
+    void set_breakpoint(std::uintptr_t addr, bool print = true);
+    void remove_breakpoint(uintptr_t addr, bool print = true);
+    void disable_breakpoint(uintptr_t addr, bool print = true);
     void continue_execution();
 
     void print_registers() const;
@@ -44,11 +44,16 @@ private:
     uint64_t read_memory(uint64_t addr) const;
     uint64_t write_memory(uint64_t addr, uint8_t val) const;
 
-    // Stepping
+    // Stepping TODO: move stepping commands to public API functions
     uint64_t get_pc() const;
     void set_pc(uint64_t pc) const;
     void single_step();
     void single_step_instruction();
+
+    // Source level stepping
+    void step_out();
+    void step_in();
+
 
     // Command handlers
     void handle(const std::string& cmd);
@@ -62,5 +67,6 @@ private:
 
 };
 
+#define RET_ADDR_FRAME_OFFSET (8)
 
 #endif //DEBUGGER_H

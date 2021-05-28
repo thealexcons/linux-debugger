@@ -153,30 +153,27 @@ void Debugger::set_breakpoint_cmd(const std::string& address) {
 }
 
 // Sets (and enables) a breakpoint at an address
-void Debugger::set_breakpoint(std::uintptr_t addr) {
-    std::cout << "Set breakpoint at address ";
-    print_hex(addr);
+void Debugger::set_breakpoint(std::uintptr_t addr, bool print) {
+    if (print) { std::cout << "Set breakpoint at address "; print_hex(addr); }
     Breakpoint bp {_pid, addr + _abs_load_addr};
     bp.enable();
     _breakpoints[addr] = bp;    // Index by relative address (without absolute load addr)
 }
 
 // Removes (and disables) a breakpoint
-void Debugger::remove_breakpoint(std::uintptr_t addr) {
+void Debugger::remove_breakpoint(std::uintptr_t addr, bool print) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();
         _breakpoints.erase(addr);
-        std::cout << "Removed breakpoint at address ";
-        print_hex(addr);
+        if (print) { std::cout << "Removed breakpoint at address "; print_hex(addr); }
     }
 }
 
 // Disables a breakpoint without removing it
-void Debugger::disable_breakpoint(std::uintptr_t addr) {
+void Debugger::disable_breakpoint(std::uintptr_t addr, bool print) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();
-        std::cout << "Disabled breakpoint at address ";
-        print_hex(addr);
+        if (print) { std::cout << "Disabled breakpoint at address "; print_hex(addr); }
     }
 }
 
@@ -237,9 +234,41 @@ void Debugger::single_step_instruction() {
             bp.enable();
         }
     } else {
-        single_step();  // No breakpoint, just single step as usualy
+        single_step();  // No breakpoint, just single step as usual
     }
 }
+
+// Step out of a function
+void Debugger::step_out() {
+    auto fp = get_reg_value(_pid, Reg::rbp);    // Get the stack frame pointer
+    auto ret_addr = read_memory(fp + RET_ADDR_FRAME_OFFSET);    // Read the return address
+
+    // Set a temporary breakpoint at the return address of a function if it does not already exist
+    bool remove_bp = false;
+    if (_breakpoints.count(ret_addr - _abs_load_addr) == 0) {
+        set_breakpoint(ret_addr, false);
+        remove_bp = true;
+    }
+
+    continue_execution();
+    if (remove_bp) {
+        remove_breakpoint(ret_addr, false);
+    }
+};
+
+// Step until we reach the next line of source code
+void Debugger::step_in() {
+    // Step through assembly representing the current line of source code
+    auto line = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr)->line;
+    while (_dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr)->line == line) {
+        single_step_instruction();
+    }
+
+    // Print the next line
+    auto line_entry = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr);
+    _dwarf_ctx.print_source(line_entry->file->path, line_entry->line);
+}
+
 
 // Get the absolute load address of the child process from /proc/<pid>/maps
 uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
