@@ -6,6 +6,7 @@
 #include <iostream>
 #include "DwarfContext.h"
 
+
 // Gets the DIE of the enclosing function from the current PC
 // TODO extension: member functions and inlining (tut5)
 dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) const {
@@ -21,6 +22,16 @@ dwarf::die DwarfContext::get_function_from_pc(uint64_t pc) const {
         }
     }
     throw std::out_of_range{"Cannot find enclosing function"};
+}
+
+// Get function entry address
+uint64_t DwarfContext::get_func_entry(const dwarf::die& d) {
+    return dwarf::at_low_pc(d);
+}
+
+// Get function end address
+uint64_t DwarfContext::get_func_end(const dwarf::die& d) {
+    return dwarf::at_high_pc(d);
 }
 
 // Gets the line corresponding to the current PC (which is a relative address)

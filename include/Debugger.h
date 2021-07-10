@@ -53,7 +53,7 @@ private:
     // Source level stepping
     void step_out();
     void step_in();
-
+    void step_over();
 
     // Command handlers
     void handle(const std::string& cmd);
@@ -64,8 +64,8 @@ private:
     void handle_sigtrap(siginfo_t info);
     static uintptr_t read_abs_load_addr(pid_t pid);
     void init_abs_load_addr_on_launch();
-
     uint64_t get_offset_pc();
+
 };
 
 #define RET_ADDR_FRAME_OFFSET (8)

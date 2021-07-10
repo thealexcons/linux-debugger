@@ -24,10 +24,12 @@ public:
     dwarf::line_table::iterator get_line_from_pc(uint64_t pc) const;
     void print_source(const std::string& file, uint line, uint num_lines=2) const;
 
+    uint64_t get_func_entry(const dwarf::die &d);
+    uint64_t get_func_end(const dwarf::die &d);
+
 private:
     dwarf::dwarf _dwarf;
     elf::elf _elf;
-
 };
 
 

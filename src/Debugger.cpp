@@ -110,10 +110,21 @@ void Debugger::handle(const std::string& line) {
         continue_execution();
     } else if (is_prefixed_by(cmd, "break")) {
         set_breakpoint_cmd(args[1]);
-    } else if (is_prefixed_by(cmd, "step")) {
+    } else if (is_prefixed_by(cmd, "stepi")) {
         single_step_instruction();
         std::cout << "Stepped over one instruction.\n";
         print_source_lines(get_offset_pc());
+    } else if (is_prefixed_by(cmd, "stepl")) {
+        step_in();
+        std::cout << "Stepped into line.\n";
+        print_source_lines(get_offset_pc());
+    } else if (is_prefixed_by(cmd, "next")) {
+        step_over();
+        std::cout << "Stepped over one line.\n";
+        print_source_lines(get_offset_pc());
+    } else if (is_prefixed_by(cmd, "finish")) {
+        step_out();
+        std::cout << "Stepped until end of function.\n";
     } else if (is_prefixed_by(cmd, "registers")) {
         if (is_prefixed_by(args[1], "print")) {
             print_registers();
@@ -219,6 +230,11 @@ void Debugger::set_pc(uint64_t pc) const {
     set_reg_value(_pid, Reg::rip, pc);
 }
 
+// Helper function to get the PC relative to the load address
+inline uint64_t Debugger::get_offset_pc() {
+    return get_pc() - _abs_load_addr;
+}
+
 // Perform a single step over an instruction via ptrace
 void Debugger::single_step() {
     ptrace(PTRACE_SINGLESTEP, _pid, nullptr, nullptr);
@@ -276,9 +292,39 @@ void Debugger::step_in() {
     _dwarf_ctx.print_source(line_entry->file->path, line_entry->line);
 }
 
-// Helper function to get the PC relative to the load address
-inline uint64_t Debugger::get_offset_pc() {
-    return get_pc() - _abs_load_addr;
+
+void Debugger::step_over() {
+    auto func = _dwarf_ctx.get_function_from_pc(get_offset_pc());
+    auto func_entry = _dwarf_ctx.get_func_entry(func);
+    auto func_end = _dwarf_ctx.get_func_end(func);
+
+    auto line = _dwarf_ctx.get_line_from_pc(func_entry);    // addr of func entry line
+    auto curr_line = _dwarf_ctx.get_line_from_pc(get_offset_pc());  // addr of current line
+
+    std::vector<std::uintptr_t> tmp_bps{};  // temporary list of breakpoints to be removed later
+
+    // Loop through line table entries, checking that it's not the current line
+    while (line->address < func_end) {
+        auto abs_addr = line->address + _abs_load_addr;
+        if (line->address != curr_line->address && _breakpoints.count(abs_addr) == 0) {
+            set_breakpoint(abs_addr, false);
+            tmp_bps.push_back(abs_addr);
+        }
+        ++line;
+    }
+
+    // Set breakpoint at the return address, similar to the step_out() method
+    auto fp = get_reg_value(_pid, Reg::rbp);
+    auto ret_addr = read_memory(fp + RET_ADDR_FRAME_OFFSET);
+    if (_breakpoints.count(ret_addr) == 0) {
+        set_breakpoint(ret_addr);
+        tmp_bps.push_back(ret_addr);
+    }
+
+    continue_execution();
+    for (auto& addr : tmp_bps) {
+        remove_breakpoint(addr, false);
+    }
 }
 
 // Get the absolute load address of the child process from /proc/<pid>/maps

@@ -9,7 +9,11 @@ loop: loop.c
 functions: functions.c
 	g++ functions.c -o functions -g -O0
 
+simple_functions: simple_functions.c
+	gcc simple_functions.c -o simple_functions -g -O0
+
 clean:
 	rm loop
 	rm hello
 	rm functions
+	rm simple_functions

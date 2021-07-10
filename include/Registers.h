@@ -70,7 +70,7 @@ const std::array<RegDescriptor, NUM_REGS> global_reg_descriptors {{
 
 // Read a register in a process
 uint64_t get_reg_value(pid_t pid, Reg r) {
-    user_regs_struct regs;
+    user_regs_struct regs{};
     ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
 
     // Find the request register in the regs struct and read its value
@@ -81,7 +81,7 @@ uint64_t get_reg_value(pid_t pid, Reg r) {
 
 // Set a register in a process
 void set_reg_value(pid_t pid, Reg r, uint64_t value) {
-    user_regs_struct regs;
+    user_regs_struct regs{};
     ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
 
     // Find the request register in the regs struct and read its value
