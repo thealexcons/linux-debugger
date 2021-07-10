@@ -13,6 +13,7 @@
 #include "Utils.h"
 #include "Registers.h"
 
+constexpr bool DEBUG_MODE = true;
 
 // Launch the process to be debugged (called by child)
 void Debugger::launch_process(const char *prog_name, pid_t pid) {
@@ -21,10 +22,10 @@ void Debugger::launch_process(const char *prog_name, pid_t pid) {
     execl(prog_name, prog_name, nullptr);                  // Start program
 }
 
-// Wait for any signal to be sent to the process
+// Wait for any signal to be sent to the child process
 void Debugger::wait_for_signal() {
     int wait_status;
-    waitpid(_pid, &wait_status, 0);
+    waitpid(_pid, &wait_status, 0); // wait for signal in the debuggee
 
     // Get the signal information and handle specific signal
     siginfo_t info;
@@ -36,7 +37,7 @@ void Debugger::wait_for_signal() {
             break;
         case SIGSEGV:
         {
-            auto line_entry = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr);
+            auto line_entry = _dwarf_ctx.get_line_from_pc(get_offset_pc());
             std::cout << "Oops, you got a segfault on line " << std::dec << line_entry->line << ":\n";
             _dwarf_ctx.print_source(line_entry->file->path, line_entry->line, 1);
             exit(EXIT_SUCCESS); // TODO: query to run again?
@@ -55,7 +56,7 @@ void Debugger::handle_sigtrap(siginfo_t info) {
         case TRAP_BRKPT:
         {
             set_pc(get_pc() - 1);   // Go back one instruction to execute the original instruction next
-            auto rel_addr = get_pc() - _abs_load_addr;
+            auto rel_addr = get_offset_pc();
             std::cout << "Hit breakpoint at 0x" << std::hex << rel_addr << std::endl;
             print_source_lines(rel_addr, 1);
             return;
@@ -74,7 +75,11 @@ inline void Debugger::init_abs_load_addr_on_launch() {
         /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
         given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
         _abs_load_addr = is_elf_pie(_prog_name.c_str()) ? read_abs_load_addr(_pid) : 0;
-        std::cout << "(FOR ME) Process " << _pid << " loaded at 0x" << std::hex << _abs_load_addr << std::endl;
+
+        if constexpr(DEBUG_MODE) {
+            std::cout << "(DEBUGGING) Process " << _pid << " loaded at 0x" << std::hex << _abs_load_addr
+                      << (_abs_load_addr == 0 ? "(pie off)" : "(pie on)") << '\n';
+        }
     }
 }
 
@@ -108,7 +113,7 @@ void Debugger::handle(const std::string& line) {
     } else if (is_prefixed_by(cmd, "step")) {
         single_step_instruction();
         std::cout << "Stepped over one instruction.\n";
-        print_source_lines(get_pc() - _abs_load_addr);
+        print_source_lines(get_offset_pc());
     } else if (is_prefixed_by(cmd, "registers")) {
         if (is_prefixed_by(args[1], "print")) {
             print_registers();
@@ -222,7 +227,7 @@ void Debugger::single_step() {
 
 // Single step over a (possible) breakpoint when resuming execution
 void Debugger::single_step_instruction() {
-    auto rel_addr = get_pc() - _abs_load_addr;
+    auto rel_addr = get_offset_pc();
 
     if (_breakpoints.count(rel_addr) != 0) {    // Check if the current instr is a breakpoint
         auto& bp = _breakpoints[rel_addr];
@@ -240,18 +245,20 @@ void Debugger::single_step_instruction() {
 
 // Step out of a function
 void Debugger::step_out() {
-    auto fp = get_reg_value(_pid, Reg::rbp);    // Get the stack frame pointer
-    auto ret_addr = read_memory(fp + RET_ADDR_FRAME_OFFSET);    // Read the return address
+    // Get the return address of the function, which is at 8 bytes from the frame pointer
+    auto fp = get_reg_value(_pid, Reg::rbp);
+    auto ret_addr = read_memory(fp + RET_ADDR_FRAME_OFFSET);
 
     // Set a temporary breakpoint at the return address of a function if it does not already exist
-    bool remove_bp = false;
+    bool remove_tmp_bp = false;
     if (_breakpoints.count(ret_addr - _abs_load_addr) == 0) {
         set_breakpoint(ret_addr, false);
-        remove_bp = true;
+        remove_tmp_bp = true;
     }
 
+    // Continue execution until end of function
     continue_execution();
-    if (remove_bp) {
+    if (remove_tmp_bp) {
         remove_breakpoint(ret_addr, false);
     }
 };
@@ -259,16 +266,20 @@ void Debugger::step_out() {
 // Step until we reach the next line of source code
 void Debugger::step_in() {
     // Step through assembly representing the current line of source code
-    auto line = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr)->line;
-    while (_dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr)->line == line) {
+    auto line = _dwarf_ctx.get_line_from_pc(get_offset_pc())->line;
+    while (_dwarf_ctx.get_line_from_pc(get_offset_pc())->line == line) {
         single_step_instruction();
     }
 
     // Print the next line
-    auto line_entry = _dwarf_ctx.get_line_from_pc(get_pc() - _abs_load_addr);
+    auto line_entry = _dwarf_ctx.get_line_from_pc(get_offset_pc());
     _dwarf_ctx.print_source(line_entry->file->path, line_entry->line);
 }
 
+// Helper function to get the PC relative to the load address
+inline uint64_t Debugger::get_offset_pc() {
+    return get_pc() - _abs_load_addr;
+}
 
 // Get the absolute load address of the child process from /proc/<pid>/maps
 uintptr_t Debugger::read_abs_load_addr(pid_t pid) {

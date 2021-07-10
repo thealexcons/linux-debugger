@@ -65,6 +65,7 @@ private:
     static uintptr_t read_abs_load_addr(pid_t pid);
     void init_abs_load_addr_on_launch();
 
+    uint64_t get_offset_pc();
 };
 
 #define RET_ADDR_FRAME_OFFSET (8)
