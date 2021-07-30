@@ -193,6 +193,16 @@ void Debugger::disable_breakpoint(std::uintptr_t addr, bool print) {
     }
 }
 
+// Set breakpoint on a function by name
+void Debugger::set_breakpoint_at_function(const std::string& name) {
+    set_breakpoint(_dwarf_ctx.get_function_by_name(name));
+}
+
+// Set breakpoint on a line within a source file
+void Debugger::set_breakpoint_at_source_line(const std::string& filename, uint line) {
+    set_breakpoint(_dwarf_ctx.get_source_line(filename, line));
+}
+
 // COMMAND: Memory read
 uint64_t Debugger::read_memory(uint64_t addr) const {
     return ptrace(PTRACE_PEEKDATA, _pid, addr + _abs_load_addr, nullptr);
@@ -329,9 +339,7 @@ void Debugger::step_over() {
 
 // Get the absolute load address of the child process from /proc/<pid>/maps
 uintptr_t Debugger::read_abs_load_addr(pid_t pid) {
-    std::string path = "/proc/";
-    path += std::to_string(pid);
-    path += "/maps";
+    std::string path = "/proc/" + std::to_string(pid) + "/maps";
 
     std::ifstream ifs {path};
     std::string addr_str;

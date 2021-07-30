@@ -1,2 +1,8 @@
 cmake-build-debug/
 .idea/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build/
+Makefile
+LinuxDebugger

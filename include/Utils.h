@@ -36,6 +36,11 @@ bool is_prefixed_by(const std::string& pre, const std::string& str) {
     return std::equal(pre.begin(), pre.end(), str.begin());
 }
 
+// Checks if suf is a suffix of str
+bool is_suffixed_by(const std::string& suf, const std::string& str) {
+    if ()
+}
+
 // Print number in hex. Set full to true for full 64 bits to be shown
 void print_hex(const uint64_t& num, bool full = false, bool end_line = true) {
     std::cout << "0x" << std::setfill('0');

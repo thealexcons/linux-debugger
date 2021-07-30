@@ -28,6 +28,8 @@ public:
     void set_breakpoint(std::uintptr_t addr, bool print = true);
     void remove_breakpoint(uintptr_t addr, bool print = true);
     void disable_breakpoint(uintptr_t addr, bool print = true);
+    void set_breakpoint_at_function(const std::string& name);
+    void set_breakpoint_at_source_line(const std::string& filename, uint line);
     void continue_execution();
 
     void print_registers() const;

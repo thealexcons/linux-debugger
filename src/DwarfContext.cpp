@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include "DwarfContext.h"
+#include "Utils.h"
 
 
 // Gets the DIE of the enclosing function from the current PC
@@ -34,6 +35,20 @@ uint64_t DwarfContext::get_func_end(const dwarf::die& d) {
     return dwarf::at_high_pc(d);
 }
 
+// Get function from its name
+ uint64_t DwarfContext::get_function_by_name(const std::string& name) const {
+    for (const auto& cu : _dwarf.compilation_units()) {
+        for (const auto& die : cu.root()) {
+            if (die.has(dwarf::DW_AT::name) && dwarf::at_name(die) == name) {
+                auto entry = get_line_from_pc(dwarf::at_low_pc(die));
+                ++entry;    // skip prologue instructions (setting up call stack)
+                return entry->address;
+            }
+        }
+    }
+}
+
+
 // Gets the line corresponding to the current PC (which is a relative address)
 dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) const {
     for (auto& cu : _dwarf.compilation_units()) {
@@ -48,6 +63,21 @@ dwarf::line_table::iterator DwarfContext::get_line_from_pc(uint64_t pc) const {
         }
     }
     throw std::out_of_range{"Cannot find line entry"};
+}
+
+// Gets address for a particular line of a source file
+uint64_t DwarfContext::get_source_line(const std::string& filename, uint line) {
+    for (const auto& cu : _dwarf.compilation_units()) {
+        if (is_suffixed_by(filename, dwarf::at_name(cu.root()))) {
+            for (const auto& entry : cu.get_line_table()) {
+                // Check that entry is the start of a statement
+                if (entry.is_stmt && entry.line == line) {
+                    return entry.address;
+                }
+            }
+        }
+    }
+    throw std::invalid_argument{"Cannot find line in source file"};
 }
 
 // Prints the source lines
@@ -79,3 +109,4 @@ void DwarfContext::print_source(const std::string &file_name, uint line, uint nu
     }
     std::cout << std::endl; // Flush the stream
 }
+
