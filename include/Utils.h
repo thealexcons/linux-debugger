@@ -16,10 +16,11 @@
 #include <iomanip>
 #include <elf.h>
 
+namespace Utils {
 // Splits a string into a vector of strings given a delimiter char
-std::vector<std::string> split_by(const std::string& str, char delim) {
+inline std::vector<std::string> split_by(const std::string &str, char delim) {
     std::vector<std::string> out;
-    std::stringstream ss {str};
+    std::stringstream ss{str};
     std::string item;
 
     while (std::getline(ss, item, delim)) {
@@ -29,7 +30,7 @@ std::vector<std::string> split_by(const std::string& str, char delim) {
 }
 
 // Checks if pre is a prefix of str
-bool is_prefixed_by(const std::string& pre, const std::string& str) {
+inline bool is_prefixed_by(const std::string &pre, const std::string &str) {
     if (pre.size() > str.size()) {
         return false;
     }
@@ -37,20 +38,23 @@ bool is_prefixed_by(const std::string& pre, const std::string& str) {
 }
 
 // Checks if suf is a suffix of str
-bool is_suffixed_by(const std::string& suf, const std::string& str) {
-    if ()
+inline bool is_suffixed_by(const std::string &suf, const std::string &str) {
+    if (suf.size() > str.size()) {
+        return false;
+    }
+    return std::equal(suf.rbegin(), suf.rend(), str.rbegin());
 }
 
 // Print number in hex. Set full to true for full 64 bits to be shown
-void print_hex(const uint64_t& num, bool full = false, bool end_line = true) {
+inline void print_hex(const uint64_t &num, bool full = false, bool end_line = true) {
     std::cout << "0x" << std::setfill('0');
-    if (full) std::cout << std::setw( 16);
+    if (full) std::cout << std::setw(16);
     std::cout << std::hex << num;
     if (end_line) std::cout << '\n';
 }
 
 // Function in C that checks if an ELF file is a shared object (PIE) or an executable
-bool is_elf_pie(const char* file) {
+inline bool is_elf_pie(const char *file) {
     Elf64_Ehdr header;
     FILE *f = fopen(file, "rb");
     if (f) {
@@ -60,5 +64,5 @@ bool is_elf_pie(const char* file) {
     fclose(f);
     return header.e_type == ET_DYN; // type flag is set to position independent (dynamic)
 }
-
+}
 #endif //UTILS_H

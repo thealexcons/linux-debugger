@@ -74,7 +74,7 @@ inline void Debugger::init_abs_load_addr_on_launch() {
     if (_abs_load_addr == UINTPTR_MAX) {
         /* If the program is compiled as PIE (by default), we need to read the abs load address to use relative addresses
         given by objdump. If PIE is turned off, objdump gives the absolute addresses, so set the offset to 0. */
-        _abs_load_addr = is_elf_pie(_prog_name.c_str()) ? read_abs_load_addr(_pid) : 0;
+        _abs_load_addr = Utils::is_elf_pie(_prog_name.c_str()) ? read_abs_load_addr(_pid) : 0;
 
         if constexpr(DEBUG_MODE) {
             std::cout << "(DEBUGGING) Process " << _pid << " loaded at 0x" << std::hex << _abs_load_addr
@@ -101,53 +101,65 @@ void Debugger::run() {
 
 // Handle user commands
 void Debugger::handle(const std::string& line) {
-    auto args = split_by(line, ' ');
+    auto args = Utils::split_by(line, ' ');
     auto cmd = args[0];
 
     // TODO: check number of args, etc. MORE ROBUST COMMAND PARSING
 
-    if (is_prefixed_by(cmd, "continue")) {
+    if (Utils::is_prefixed_by(cmd, "continue")) {
         continue_execution();
-    } else if (is_prefixed_by(cmd, "break")) {
-        set_breakpoint_cmd(args[1]);
-    } else if (is_prefixed_by(cmd, "stepi")) {
+    } else if (Utils::is_prefixed_by(cmd, "break")) {
+        if (args[1][0] == '0' && args[1][1] == 'x') {   // 0xADDRESS
+            set_breakpoint_cmd(args[1]);
+        } else if (args[1].find(':') != std::string::npos) {    // file:line
+            auto file_line = Utils::split_by(args[1], ':');
+            set_breakpoint_at_source_line(file_line[0], std::stoi(file_line[1]));
+        } else {    // function
+            set_breakpoint_at_function(args[1]);
+        }
+    } else if (Utils::is_prefixed_by(cmd, "stepi")) {
         single_step_instruction();
         std::cout << "Stepped over one instruction.\n";
         print_source_lines(get_offset_pc());
-    } else if (is_prefixed_by(cmd, "stepl")) {
+    } else if (Utils::is_prefixed_by(cmd, "stepl")) {
         step_in();
         std::cout << "Stepped into line.\n";
         print_source_lines(get_offset_pc());
-    } else if (is_prefixed_by(cmd, "next")) {
+    } else if (Utils::is_prefixed_by(cmd, "next")) {
         step_over();
         std::cout << "Stepped over one line.\n";
         print_source_lines(get_offset_pc());
-    } else if (is_prefixed_by(cmd, "finish")) {
+    } else if (Utils::is_prefixed_by(cmd, "finish")) {
         step_out();
         std::cout << "Stepped until end of function.\n";
-    } else if (is_prefixed_by(cmd, "registers")) {
-        if (is_prefixed_by(args[1], "print")) {
+    } else if (Utils::is_prefixed_by(cmd, "registers")) {
+        if (Utils::is_prefixed_by(args[1], "print")) {
             print_registers();
-        } else if (is_prefixed_by(args[1], "read")) {
+        } else if (Utils::is_prefixed_by(args[1], "read")) {
             auto val = get_reg_value(_pid, get_reg_from_name(args[2]));
-            print_hex(val, true);
-        } else if (is_prefixed_by(args[1], "write")) {
+            Utils::print_hex(val, true);
+        } else if (Utils::is_prefixed_by(args[1], "write")) {
             auto val = std::stol(args[3], nullptr, 16);
             set_reg_value(_pid, get_reg_from_name(args[2]), val);
-            std::cout << "Wrote value "; print_hex(val, false, false);
+            std::cout << "Wrote value "; Utils::print_hex(val, false, false);
             std::cout << " to register " << args[2] << '\n';
         } else {
             std::cerr << "Usage: 'print', 'read <reg>' or 'write <reg> <val>'\n";
         }
-    } else if (is_prefixed_by(cmd, "memory")) {
+    } else if (Utils::is_prefixed_by(cmd, "memory")) {
         auto addr = std::stol(args[2], nullptr, 16);
-        if (is_prefixed_by(args[1], "read")) {
-            print_hex(read_memory(addr));
-        } else if (is_prefixed_by(args[1], "write")) {
+        if (Utils::is_prefixed_by(args[1], "read")) {
+            Utils::print_hex(read_memory(addr));
+        } else if (Utils::is_prefixed_by(args[1], "write")) {
             auto val = std::stol(args[3], nullptr, 16);
             write_memory(addr, val);
         } else {
             std::cerr << "Usage: 'print', 'read <reg>' or 'write <reg> <val>'\n";
+        }
+    } else if (Utils::is_prefixed_by(cmd, "symbol")) {
+        auto symbols = _dwarf_ctx.lookup_symbol(args[1]);
+        for (auto&& s : symbols) {
+            std::cout << s.name << ' ' << to_string(s.type) << " 0x" << std::hex << s.addr << '\n';
         }
     } else {
         std::cerr << "Unknown command\n";
@@ -170,7 +182,7 @@ void Debugger::set_breakpoint_cmd(const std::string& address) {
 
 // Sets (and enables) a breakpoint at an address
 void Debugger::set_breakpoint(std::uintptr_t addr, bool print) {
-    if (print) { std::cout << "Set breakpoint at address "; print_hex(addr); }
+    if (print) { std::cout << "Set breakpoint at address "; Utils::print_hex(addr); }
     Breakpoint bp {_pid, addr + _abs_load_addr};
     bp.enable();
     _breakpoints[addr] = bp;    // Index by relative address (without absolute load addr)
@@ -181,7 +193,7 @@ void Debugger::remove_breakpoint(std::uintptr_t addr, bool print) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();
         _breakpoints.erase(addr);
-        if (print) { std::cout << "Removed breakpoint at address "; print_hex(addr); }
+        if (print) { std::cout << "Removed breakpoint at address "; Utils::print_hex(addr); }
     }
 }
 
@@ -189,7 +201,7 @@ void Debugger::remove_breakpoint(std::uintptr_t addr, bool print) {
 void Debugger::disable_breakpoint(std::uintptr_t addr, bool print) {
     if (_breakpoints.count(addr) != 0) {
         _breakpoints[addr].disable();
-        if (print) { std::cout << "Disabled breakpoint at address "; print_hex(addr); }
+        if (print) { std::cout << "Disabled breakpoint at address "; Utils::print_hex(addr); }
     }
 }
 
@@ -218,7 +230,7 @@ void Debugger::print_registers() const {
     for (int i = 0; i < NUM_REGS; i++) {
         Reg r = static_cast<Reg>(i);
         std::cout << get_reg_name(r) << " ";
-        print_hex(get_reg_value(_pid, r), true);
+        Utils::print_hex(get_reg_value(_pid, r), true);
     }
 }
 

@@ -29,10 +29,36 @@ public:
     uint64_t get_func_entry(const dwarf::die &d);
     uint64_t get_func_end(const dwarf::die &d);
 
+    enum class SymbolType {
+        NoType,
+        Object,
+        Function,
+        Section,
+        File,
+    };
+
+    struct Symbol {
+        SymbolType type;
+        std::string name;
+        std::uint64_t addr;
+    };
+    static SymbolType get_symbol_type(elf::stt symbol);
+    std::vector<Symbol> lookup_symbol(const std::string& name);
+
 private:
     dwarf::dwarf _dwarf;
     elf::elf _elf;
 };
+
+inline std::string to_string(DwarfContext::SymbolType st) {
+    switch (st) {
+        case DwarfContext::SymbolType::NoType: return "notype";
+        case DwarfContext::SymbolType::Object: return "object";
+        case DwarfContext::SymbolType::Function: return "func";
+        case DwarfContext::SymbolType::Section: return "section";
+        case DwarfContext::SymbolType::File: return "file";
+    }
+}
 
 
 #endif //DWARFCONTEXT_H
