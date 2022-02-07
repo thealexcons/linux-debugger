@@ -1,6 +1,6 @@
 # Simple Linux Debugger
 
-A simple command-line debugger for Linux-based ELF binaries, inspired by GDB. This is my first ever C++ project; I used it to familiarise myself with STL containers and algorithms, and also to interface with lower-level system APIs such as ``ptrace`` and other process management syscalls.
+A simple command-line debugger for Linux-based ELF binaries, inspired by GDB. 
 
 
 ## Getting Started
